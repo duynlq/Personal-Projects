@@ -1,7 +1,7 @@
 # Personal Projects
 Collection of data science projects from DataScience@SMU and datasets from Kaggle.
 
-*Tools used: R (tidyverse, ggplot2, DataExplorer, inspectdf, ggpubr, corrplot, e1071, caret, DAAG, car, lindia, gridExtra, kableExtra, olsrr)*
+*Tools used: R (tidyverse, ggplot2, DataExplorer, inspectdf, ggpubr, corrplot, e1071, caret, DAAG, car, lindia, gridExtra, kableExtra, MASS, olsrr, forcats, Metrics)*
 
 ## Contents
 
