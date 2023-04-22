@@ -1,5 +1,4 @@
 # Personal Projects
-Collection of data science projects using datasets from Kaggle.
 
 Tools used: 
 + *Python (Pandas, Numpy, Pyplot, Seaborn, scikit-learn, imbalanced-learn, email, nltk, re, scipy, xgboost, Tensorflow)* 
