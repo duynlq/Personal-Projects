@@ -1,0 +1,822 @@
+---
+title: "Personal Loan Analysis: Project 2 Stats 2 DataScience@SMU Summer 2022"
+author: "Laura Ahumada, Erin McClure-Price, Duy Nguyen"
+date: "07/16/2022"
+output: html_document
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Libraries
+```{r, warning=F, message=F}
+library(tidyverse)
+# library(psych)          # describe()
+library(DataExplorer)     # plot_missing() | drop_columns()
+library(caret)            # nearZeroVar() | knnreg()
+# library(inspectdf)      # inspect_cat() | show_plots()
+# library(ggstance)       # geom_boxploth()
+# library(corrplot)       # corrplot() | cor()
+# library(ggpubr)         # ggscatter()
+library(MASS)             # stepAIC()
+library(regclass)         # vif()
+# library(leaps)          # regsubsets()
+library(ggplot2)          # ggplot()
+library(glmtoolbox)       # hltest()
+# library(purrr)          # map()
+library(GGally)           # ggcorr() | ggpairs()
+library(lindia)           # gg_cooksd() | gg_scalelocation
+library(gridExtra)        # grid.arrange
+# library(FNN)            # knn.reg()
+# library(Metrics)        # mse()
+library(glmnet)           # cv.glmnet()
+library(ROCR)             # prediction() | performance()
+library(stats)            # logLik()
+library(MLmetrics)        # LogLoss()
+#################CLUSTERS#################
+library(mvtnorm)
+library(RColorBrewer)
+library(pheatmap)
+library(cluster)
+
+library(jtools)           # interact_plot()
+library(broom)            # augment()
+```
+
+## Import Data
+```{r}
+getwd()
+df = read.csv("Bank_Personal_Loan_Modelling.csv")
+
+```
+
+## EDA
+```{r}
+str(df)
+
+# Identification Columns (ID and ZIP.Code)
+df = df[-c(1,5)]
+str(df)
+
+# Naturally Factor Variables
+factor_vars = c("Family", "Education", "Personal.Loan", 
+                "Securities.Account", "CD.Account", "Online", "CreditCard")
+df[factor_vars] = lapply(df[factor_vars], as.factor)
+str(df)
+
+# missing values
+plot_missing(df)
+
+# near zero variance
+nearZeroVar(df, names = TRUE)
+#df = df[-c(nearZeroVar(df))] # Removed Mortgage
+str(df)
+
+# multicollinearity
+ggcorr(df, label = T)
+## Age and Experience have correlation of 1
+ggplot( df, aes(Experience, Age)) + geom_point()
+ggplot(df, aes(Experience/Age)) + geom_histogram()
+df = df %>% mutate(Experience2 = Experience/Age)
+df = df[-c(1,2)] # getting rid of Age and Experience
+str(df)
+ggcorr(df, label = T)
+```
+
+```{r, message=F}
+# pairs plots
+#newAuto$mpg<-factor(ifelse(Auto$mpg>median(Auto$mpg),"High","Low"),levels=c("Low","High"))   # used for numeric outcome into categorical outcome (using median)
+              # kept for future reference
+levels(df$Personal.Loan) = c("No", "Yes")
+ggpairs(df, aes(colour = Personal.Loan))
+
+## Using the trick of already knowing what my stepwise logistic regression model consists of in terms of coefficients (which are Income, Family, CCAvg, Education, Securities.Account, CD.Account, Online, and CreditCard) I can pretend to say that the following variables can be considered in our model for Objective 1 to predict whether if a customer will accept a personal loan offer or not.
+
+## We can see that, for variables with multiple levels, the levels with even a slight change compared to the reference level (1st level) are found as significant to our stepwise logistic regression model.
+
+# This determines green is yes.
+plot(df$Personal.Loan, col= c("lightblue","pink")) 
+par(mfrow=c(2,3))
+plot(Personal.Loan ~ ., data = df, col= c("pink","lightblue"))
+
+```
+
+## EDA: Exploring Interactions
+```{r}
+#interact_plot()
+
+```
+
+## EDA: Heatmaps (Unit 13)
+```{r}
+
+```
+
+## EDA: Cluster Analysis (Unit 13)
+```{r}
+
+```
+
+## Train Test Split
+```{r}
+set.seed(123)
+
+split = sample(nrow(df), nrow(df)*0.7)
+
+train = df[split,]
+test = df[-split,]
+
+```
+
+# Objective 1: Logistic Regression Model
+```{r}
+premodel = glm(Personal.Loan ~ ., data = train, family = "binomial")
+
+# feature selection - stepwise
+stepAIC(premodel, direction = "both")
+
+model1 = glm(formula = Personal.Loan ~ Income + Family + CCAvg + Education + 
+    Securities.Account + CD.Account + Online + CreditCard, family = "binomial", 
+    data = train)
+
+```
+
+### Hypothesis Testing
+```{r}
+summary(model1)
+
+# As the p-values of all variables used in model1, aside from Family2, are all less than 0.05, none of them are insignificant in our logistic regression model.
+```
+
+### Criterion
+```{r}
+AIC(model1)          #  AIC = 818.07
+BIC(model1)          #  BIC = 892
+```
+
+### Verify Predictions Manually
+```{r}
+# Holding the upcoming predictions accountable
+prop.table(table(df$Personal.Loan))
+prop.table(table(train$Personal.Loan))
+prop.table(table(test$Personal.Loan))
+
+# This means that, 
+# it is preferred that our predictions are 90% no loan and 10% yes loan.
+
+# The general idea is, for a bank problem like this where we are trying to find profit from the highest number of customers who will accept a personal loan offer as we can, we want to have an as-low-as-possible chance of predicting customers saying no but they actually do want to say yes because, not calling an interested customer will cost us valuable profits. However, calling a disinterested customer will not hurt that much where they will simply assume that it's a cold call. Unless our decisions mean that the bank can forcibly and automatically give a customer a loan despite them not being interested in a loan, or rather a more realistic example like using software to determine a patient to have cancer even though they do not, and that patient will wastefully go through a surgery process, like an actionable decision from our predictions, we should be fine with a low specificity (with the other proportion of low specificity meaning a high chance of predicting yes to people saying no, which is perfectly OK and can be overlooked).
+
+pred.step = predict(model1, test, type = "response")
+
+step.cutoff = 0.426
+class.step = as.factor(if_else(pred.step < step.cutoff, "No", "Yes"))
+#pred = as.factor(if_else(pred < 0.3, 0, 1))
+prop.table(table(class.step))
+
+# Confusion Matrix
+confusionMatrix(class.step, test$Personal.Loan)
+                          #  Threshold   = 0.426
+                          #  Accuracy    = 0.968
+                          #  Sensitivity = 0.7613
+                          #  Specificity = 0.9919
+```
+
+### Assumptions
+```{r}
+# Linearity
+## Predict the probability (p) of personal loan offer
+probabilities <- predict(model1, type = "response")
+length(probabilities)
+step.cutoff = 0.3
+predicted.classes <- ifelse(probabilities > step.cutoff, "Yes", "No")
+head(predicted.classes)
+## Select only numeric predictors
+mydata <- train %>% select_if(is.numeric) 
+predictors <- colnames(mydata)
+## Bind the logit and tidying the data for plot
+mydata <- mydata %>%
+  mutate(logit = log(probabilities/(1-probabilities))) %>%
+  gather(key = "predictors", value = "predictor.value", -logit)
+## Create scatter plots
+ggplot(mydata, aes(logit, predictor.value))+
+  geom_point(size = 0.5, alpha = 0.5) +
+  geom_smooth(method = "loess") + 
+  theme_bw() + 
+  facet_wrap(~predictors, scales = "free_y")
+
+# Influential Points
+par(mfrow = c(1, 2))
+## Cook's Distance Plot
+plot(model1, 4, 3)
+## Standardized Residuals vs Leverage
+plot(model1, 5, 3)
+par(mfrow = c(1, 1))
+## Extract model results
+model.data <- augment(model1) %>% 
+  mutate(index = 1:n()) 
+model.data %>% top_n(3, .cooksd)
+ggplot(model.data, aes(index, .std.resid)) + 
+  geom_point(aes(color = Personal.Loan), alpha = .5) +
+  theme_bw()
+## Culprit Outlier Observations
+outliers = model.data %>% filter(abs(.std.resid) > 3)
+outliers$.rownames
+
+# Multicollinearity
+VIF(model1)
+```
+
+### Interpretations and Confidence Intervals
+```{r}
+# Coefficients
+coef(model1)
+
+# interpret as log odds & confidence intervals
+format(exp(cbind("Odds Ratio" = coef(model1), 
+                 confint.default(model1, level = 0.95))),
+       scientific = F)
+
+# Holding all other variables constant, 
+### an increase of $1,000 in a customer's income is associated with an increase of 6.58871% in the odds of them accepting a personal loan offer.
+### customers with a family size of 2 have around 0.814 times the odds of accepting a personal loan offer than those who don’t.
+### ...
+### customers with a securities account have a .49 times the odds of those who don't of accepting a personal loan offer.
+### ...
+
+```
+
+## Objective 1: LASSO Penalized Logistic Regression Model
+```{r}
+str(train)
+dat.train.x = model.matrix(Personal.Loan ~ Income + Family + CCAvg + Education + Securities.Account + CD.Account + Online + CreditCard + Experience2, train)
+dat.train.y = train$Personal.Loan
+
+cvfit = cv.glmnet(dat.train.x, dat.train.y, family = "binomial", type.measure = "class", nlambda = 1000)
+plot(cvfit)
+coef(cvfit, s = "lambda.min")
+# CV misclassification error rate is little below .10
+cvfit$cvm[which(cvfit$lambda==cvfit$lambda.min)]
+
+# Optimal penalty
+cvfit$lambda.min
+
+# For final model predictions go ahead and refit lasso using entire data set
+LASSOmodel = glmnet(dat.train.x, dat.train.y, family = "binomial",lambda=cvfit$lambda.min)
+coef(LASSOmodel, s = "lambda.min")
+
+# Predict
+dat.test.x = model.matrix(Personal.Loan ~ Income + Family + CCAvg + Education + Securities.Account + CD.Account + Online + CreditCard + Experience2, test)
+fit.pred.lasso = predict(LASSOmodel, newx = dat.test.x, type = "response")
+
+LASSO.cutoff = 0.44
+class.lasso = as.factor(if_else(fit.pred.lasso < LASSO.cutoff, "No", "Yes"))
+
+# Confusion Matrix for Lasso
+conf.lasso = table(class.lasso, test$Personal.Loan)
+conf.lasso
+
+# Accuracy of LASSO
+sum(diag(conf.lasso))/sum(conf.lasso)
+
+# Sensitivity & Specificity of LASSO
+cm = confusionMatrix(class.lasso, test$Personal.Loan)
+cm$byClass
+                          #  Threshold   = 0.44
+                          #  Accuracy    = 0.9633
+                          #  Sensitivity = 0.6774
+                          #  Specificity = 0.9963
+
+```
+
+## Objective 1: Erin's Model based on Intuition
+```{r}
+mod.erin = glm(formula = Personal.Loan ~ Income + Family + Education + CD.Account + CreditCard,
+           family = "binomial", data = train)
+summary(mod.erin)
+
+# Criterion
+AIC(mod.erin)             #  AIC = 836.8792
+BIC(mod.erin)             #  BIC = 892.3239
+
+pred.erin = predict(mod.erin, test, type = "response")
+erin.cutoff = 0.5
+class.erin = as.factor(if_else(pred.erin < erin.cutoff, "No", "Yes"))
+prop.table(table(class.erin))
+confusionMatrix(class.erin, test$Personal.Loan)
+                          #  Threshold   = 0.5
+                          #  Accuracy    = 0.9593
+                          #  Sensitivity = 0.6516
+                          #  Specificity = 0.9948
+```
+
+## Objective 1: Origin Model (Income Only)
+```{r}
+model_income = glm(formula = Personal.Loan ~ Income, family = "binomial", data = train)
+summary(model_income)
+
+pred.income = predict(model_income, test, type = "response")
+
+income.cutoff = 0.3
+class.income = as.factor(if_else(pred.income < income.cutoff, "No", "Yes"))
+prop.table(table(class.income))
+confusionMatrix(class.income, test$Personal.Loan)
+                          #  Threshold   = 0.3
+                          #  Accuracy    = 0.8933
+                          #  Sensitivity = 0.5290
+                          #  Specificity = 0.9353
+# Criterion
+AIC(model_income)          #  AIC = 1411.45
+BIC(model_income)          #  BIC = 1423.771
+```
+
+### Comparing ROCR Curves
+```{r}
+# Stepwise
+pred_prob = predict(model1, test, type = "response")
+test_label = df[-split, "Personal.Loan"]
+results.step = prediction(pred_prob, test_label)
+roc.step = performance(results.step, measure = "tpr", x.measure = "fpr")
+
+# LASSO
+results.lasso = prediction(fit.pred.lasso,
+                           test$Personal.Loan, 
+                           label.ordering=c("No", "Yes"))
+roc.lasso = performance(results.lasso, measure = "tpr", x.measure = "fpr")
+
+# Erin's Intuition
+results.erin = prediction(pred.erin, test_label)
+roc.erin = performance(results.erin, measure = "tpr", x.measure = "fpr")
+
+# Origin (Income Only)
+results.income = prediction(pred.income, test_label)
+roc.income = performance(results.income, measure = "tpr", x.measure = "fpr")
+
+plot(roc.step, col = "red", xlim = c(0, 0.3), ylim = c(0.7, 1.0))
+plot(roc.lasso, col = "green", add = TRUE, xlim = c(0, 0.3), ylim = c(0.7, 1.0))
+plot(roc.erin, col = "blue", add = TRUE, xlim = c(0, 0.3), ylim = c(0.7, 1.0))
+plot(roc.income, col = "pink", add = TRUE, xlim = c(0, 0.3), ylim = c(0.7, 1.0))
+legend("bottomright", legend = c("Stepwise", "Lasso", "Erin", "Origin (Income Only)"), 
+       col = c("red", "green","blue", "pink"), 
+       lty=1, lwd=1)
+#abline(a=0, b= 1)
+#abline(a=1, b= -1)
+
+# Stepwise seems to be the better performing model according to the above ROC curves.
+
+```
+
+# Objective 2: Adding Complexity
+```{r}
+model.poly.income2 = glm(formula = Personal.Loan ~ poly(Income, 2) + Family + CCAvg + Education + Securities.Account + CD.Account + Online + CreditCard, family = "binomial", data = train)
+pred.poly.income2 = predict(model.poly.income2, test, type = "response")
+poly.income2.cutoff = 0.55
+class.poly.income2 = as.factor(if_else(pred.poly.income2 < poly.income2.cutoff, "No", "Yes"))
+prop.table(table(class.poly.income2))
+confusionMatrix(class.poly.income2, test$Personal.Loan)
+results.poly.income2 = prediction(pred.poly.income2, test_label)
+roc.poly.income2 = performance(results.poly.income2, measure = "tpr", x.measure = "fpr")
+
+model.poly.income3 = glm(formula = Personal.Loan ~ poly(Income, 3) + Family + CCAvg + Education + Securities.Account + CD.Account + Online + CreditCard, family = "binomial", data = train)
+pred.poly.income3 = predict(model.poly.income3, test, type = "response")
+poly.income3.cutoff = 0.55
+class.poly.income3 = as.factor(if_else(pred.poly.income3 < poly.income3.cutoff, "No", "Yes"))
+prop.table(table(class.poly.income3))
+confusionMatrix(class.poly.income3, test$Personal.Loan)
+results.poly.income3 = prediction(pred.poly.income3, test_label)
+roc.poly.income3 = performance(results.poly.income3, measure = "tpr", x.measure = "fpr")
+
+model.poly.CCAvg2 = glm(formula = Personal.Loan ~ Income + Family + poly(CCAvg, 2) + Education + Securities.Account + CD.Account + Online + CreditCard, family = "binomial", data = train)
+pred.poly.CCAvg2 = predict(model.poly.CCAvg2, test, type = "response")
+poly.CCAvg2.cutoff = 0.55
+class.poly.CCAvg2 = as.factor(if_else(pred.poly.CCAvg2 < poly.CCAvg2.cutoff, "No", "Yes"))
+prop.table(table(class.poly.CCAvg2))
+confusionMatrix(class.poly.CCAvg2, test$Personal.Loan)
+results.poly.CCAvg2 = prediction(pred.poly.CCAvg2, test_label)
+roc.poly.CCAvg2 = performance(results.poly.CCAvg2, measure = "tpr", x.measure = "fpr")
+
+model.poly.CCAvg3 = glm(formula = Personal.Loan ~ Income + Family + poly(CCAvg, 3) + Education + Securities.Account + CD.Account + Online + CreditCard, family = "binomial", data = train)
+pred.poly.CCAvg3 = predict(model.poly.CCAvg3, test, type = "response")
+poly.CCAvg3.cutoff = 0.55
+class.poly.CCAvg3 = as.factor(if_else(pred.poly.CCAvg3 < poly.CCAvg3.cutoff, "No", "Yes"))
+prop.table(table(class.poly.CCAvg3))
+confusionMatrix(class.poly.CCAvg3, test$Personal.Loan)
+results.poly.CCAvg3 = prediction(pred.poly.CCAvg3, test_label)
+roc.poly.CCAvg3 = performance(results.poly.CCAvg3, measure = "tpr", x.measure = "fpr")
+
+model.poly.both2 = glm(formula = Personal.Loan ~ poly(Income, 2) + Family + poly(CCAvg, 2) + Education + Securities.Account + CD.Account + Online + CreditCard, family = "binomial", data = train)
+pred.poly.both2 = predict(model.poly.both2, test, type = "response")
+poly.both2.cutoff = 0.55
+class.poly.both2 = as.factor(if_else(pred.poly.both2 < poly.both2.cutoff, "No", "Yes"))
+prop.table(table(class.poly.both2))
+confusionMatrix(class.poly.both2, test$Personal.Loan)
+results.poly.both2 = prediction(pred.poly.both2, test_label)
+roc.poly.both2 = performance(results.poly.both2, measure = "tpr", x.measure = "fpr")
+
+model.poly.both3 = glm(formula = Personal.Loan ~ poly(Income, 3) + Family + poly(CCAvg, 3) + Education + Securities.Account + CD.Account + Online + CreditCard, family = "binomial", data = train)
+pred.poly.both3 = predict(model.poly.both3, test, type = "response")
+poly.both3.cutoff = 0.55
+class.poly.both3 = as.factor(if_else(pred.poly.both3 < poly.both3.cutoff, "No", "Yes"))
+prop.table(table(class.poly.both3))
+confusionMatrix(class.poly.both3, test$Personal.Loan)
+results.poly.both3 = prediction(pred.poly.both3, test_label)
+roc.poly.both3 = performance(results.poly.both3, measure = "tpr", x.measure = "fpr")
+
+confusionMatrix(class.poly.income2, test$Personal.Loan)$overall[1]
+confusionMatrix(class.poly.income3, test$Personal.Loan)$overall[1]
+confusionMatrix(class.poly.CCAvg2, test$Personal.Loan)$overall[1]
+confusionMatrix(class.poly.CCAvg3, test$Personal.Loan)$overall[1]
+confusionMatrix(class.poly.both2, test$Personal.Loan)$overall[1]
+confusionMatrix(class.poly.both3, test$Personal.Loan)$overall[1]
+
+plot(roc.step, col = "red", xlim = c(0, 0.3), ylim = c(0.7, 1.0))
+plot(roc.poly.income2, col = "green", add = TRUE, xlim = c(0, 0.3), ylim = c(0.7, 1.0))
+plot(roc.poly.income3, col = "blue", add = TRUE, xlim = c(0, 0.3), ylim = c(0.7, 1.0))
+plot(roc.poly.CCAvg2, col = "blueviolet", add = TRUE, xlim = c(0, 0.3), ylim = c(0.7, 1.0))
+plot(roc.poly.CCAvg3, col = "aquamarine", add = TRUE, xlim = c(0, 0.3), ylim = c(0.7, 1.0))
+plot(roc.poly.both2, col = "chartreuse", add = TRUE, xlim = c(0, 0.3), ylim = c(0.7, 1.0))
+plot(roc.poly.both3, col = "coral", add = TRUE, xlim = c(0, 0.3), ylim = c(0.7, 1.0))
+legend("bottomright", legend = c("Stepwise", "polyincome2", "polyincome3", "polyCCAVg2", "polyCCAvg3", "polyboth2", "polyboth3"), 
+       col = c("red", "green", "blue", "blueviolet", "aquamarine", "chartreuse", "coral"), 
+       lty=1, lwd=1)
+
+# Polynomial Income^3 seems to be the best performing model according to the above plot.
+```
+
+# Objective 2: Working Towards A Best Model
+```{r}
+str(train)
+## Addressing Mortgage
+facets = c("Mortgage")
+ggplot(mydata[mydata$predictors %in% facets,], aes(logit, predictor.value))+
+  geom_point(size = 0.5, alpha = 0.5) +
+  geom_smooth(method = "loess") +
+  theme_bw() +
+  facet_wrap(~predictors, scales = "free_y")
+
+## Training Stepwise again but with logged Mortgage
+str(df$Mortgage)
+final_df = mutate(df)
+## Fixing Mortgage values
+final_df$Mortgage[final_df$Mortgage == 0] = 1
+final_df$LoggedMortgage = log(final_df$Mortgage)
+plot(Personal.Loan ~ LoggedMortgage, data = final_df, col= c("pink","lightblue")) # Mortgage is now somewhat distributed
+set.seed(123)
+split = sample(nrow(final_df), nrow(final_df)*0.7)
+final_train = final_df[split,]
+final_test = final_df[-split,]
+```
+
+```{r}
+# prefinalmodel0: Stepwise with logged Mortgage.
+prefinalmodel0 = glm(Personal.Loan ~ ., data = final_train, family = "binomial")
+## Feature selection - stepwise
+stepAIC(prefinalmodel0, direction = "both")
+finalmodel0 = glm(formula = Personal.Loan ~ Income + Family + CCAvg + Education + 
+    Securities.Account + CD.Account + Online + CreditCard + LoggedMortgage, 
+    family = "binomial", data = final_train)
+summary(finalmodel0)
+AIC(finalmodel0)          #  AIC = 817.1093
+BIC(finalmodel0)          #  BIC = 897.1968
+## Testing finalmodel0
+pred.final0 = predict(finalmodel0, final_test, type = "response")
+final0.cutoff = 0.4
+class.final0 = as.factor(if_else(pred.final0 < final0.cutoff, "No", "Yes"))
+prop.table(table(class.final0))
+## Confusion Matrix
+confusionMatrix(class.final0, final_test$Personal.Loan)
+                          #  Threshold   = 0.4
+                          #  Accuracy    = 0.968
+                          #  Sensitivity = 0.76774
+                          #  Specificity = 0.99108
+```
+
+```{r}
+# prefinalmodel0a: Stepwise with logged Mortgage and 3rd power Income.
+prefinalmodel0a = glm(Personal.Loan ~ ., data = final_train, family = "binomial")
+## Feature selection - stepwise
+stepAIC(prefinalmodel0a, direction = "both")
+finalmodel0a = glm(formula = Personal.Loan ~ poly(Income, 3) + Family + CCAvg + Education + 
+    Securities.Account + CD.Account + Online + CreditCard + LoggedMortgage, 
+    family = "binomial", data = final_train)
+summary(finalmodel0a)
+AIC(finalmodel0a)          #  AIC = 655.5022
+BIC(finalmodel0a)          #  BIC = 747.9099
+## Testing finalmodela
+pred.final0a = predict(finalmodel0a, final_test, type = "response")
+final0a.cutoff = 0.33
+class.final0a = as.factor(if_else(pred.final0a < final0a.cutoff, "No", "Yes"))
+prop.table(table(class.final0a))
+## Confusion Matrix
+confusionMatrix(class.final0a, final_test$Personal.Loan)
+                          #  Threshold   = 0.33
+                          #  Accuracy    = 0.972
+                          #  Sensitivity = 0.89677
+                          #  Specificity = 0.98067
+```
+
+```{r}
+# prefinalmodel1: Stepwise with logged Mortgage and below observations removed.
+model1_train = final_train[-c(350, 976, 1070, 1127, 2159),]
+prefinalmodel1 = glm(Personal.Loan ~ ., data = model1_train, family = "binomial")
+## Feature selection - stepwise
+stepAIC(prefinalmodel1, direction = "both")
+finalmodel1 = glm(formula = Personal.Loan ~ Income + Family + CCAvg + Education + 
+    Securities.Account + CD.Account + Online + CreditCard + LoggedMortgage, 
+    family = "binomial", data = model1_train)
+summary(finalmodel1)
+AIC(finalmodel1)          #  AIC = 813.9434
+BIC(finalmodel1)          #  BIC = 894.0116
+## Testing finalmodel1
+pred.final1 = predict(finalmodel1, final_test, type = "response")
+final1.cutoff = 0.4
+class.final1 = as.factor(if_else(pred.final1 < final1.cutoff, "No", "Yes"))
+prop.table(table(class.final1))
+## Confusion Matrix
+confusionMatrix(class.final1, final_test$Personal.Loan)
+                          #  Threshold   = 0.4
+                          #  Accuracy    = 0.9673
+                          #  Sensitivity = 0.77419
+                          #  Specificity = 0.98959
+```
+
+```{r}
+# prefinalmodel1a: Stepwise with logged Mortgage, below observations removed, and 3rd power Income.
+model1_train = final_train[-c(350, 976, 1070, 1127, 2159),]
+prefinalmodel1a = glm(Personal.Loan ~ ., data = model1_train, family = "binomial")
+## Feature selection - stepwise
+stepAIC(prefinalmodel1a, direction = "both")
+finalmodel1a = glm(formula = Personal.Loan ~ poly(Income, 3) + Family + CCAvg + Education + 
+    Securities.Account + CD.Account + Online + CreditCard + LoggedMortgage, 
+    family = "binomial", data = model1_train)
+summary(finalmodel1a)
+AIC(finalmodel1a)          #  AIC = 654.8965
+BIC(finalmodel1a)          #  BIC = 747.2828
+## Testing finalmodel1a
+pred.final1a = predict(finalmodel1a, final_test, type = "response")
+final1a.cutoff = 0.33
+class.final1a = as.factor(if_else(pred.final1a < final1a.cutoff, "No", "Yes"))
+prop.table(table(class.final1a))
+## Confusion Matrix
+confusionMatrix(class.final1a, final_test$Personal.Loan)
+                          #  Threshold   = 0.33
+                          #  Accuracy    = 0.972
+                          #  Sensitivity = 0.89677
+                          #  Specificity = 0.98067
+```
+
+## Objective 2: Inspecting Interactions
+```{r}
+# This is using the original dataset
+
+library(sjPlot)    #For effect plotting
+library(sjmisc)    #For effect plotting
+
+getwd()
+PersonalL=read.csv("Bank_Personal_Loan_Modelling.csv")
+
+# Age is omitted for plotting since it's replaced by Experience2.
+
+#Education,Family,CCAvg,Online,CreditCard, Securities.Account
+a=ggplot(PersonalL,aes(x=Income,y=Personal.Loan,colour=Education))+geom_point()+
+  geom_smooth(method="loess",size=1,span=1.5)+
+  ylim(-.2,1.2)+
+  facet_wrap(~Education)
+
+b0=ggplot(PersonalL,aes(x=Income,y=Personal.Loan,colour=Family))+geom_point()+
+  geom_smooth(method="loess",size=1,span=1.5)+
+  ylim(-.2,1.2)+
+  facet_wrap(~Family)
+
+c=ggplot(PersonalL,aes(x=Income,y=Personal.Loan,colour=CCAvg))+geom_point()+
+  geom_smooth(method="loess",size=1,span=1.5)+
+  ylim(-.2,1.2)+
+  facet_wrap(~CCAvg)
+
+d=ggplot(PersonalL,aes(x=Income,y=Personal.Loan,colour=Online))+geom_point()+
+  geom_smooth(method="loess",size=1,span=1.5)+
+  ylim(-.2,1.2)+
+  facet_wrap(~Online)
+
+e=ggplot(PersonalL,aes(x=Income,y=Personal.Loan,colour=CreditCard))+geom_point()+
+  geom_smooth(method="loess",size=1,span=1.5)+
+  ylim(-.2,1.2)+
+  facet_wrap(~CreditCard)
+
+f=ggplot(PersonalL,aes(x=Income,y=Personal.Loan,colour=Securities.Account))+geom_point()+
+  geom_smooth(method="loess",size=1,span=1.5)+
+  ylim(-.2,1.2)+
+  facet_wrap(~Securities.Account)
+
+
+grid.arrange(a,f,e,d, ncol=2)
+
+#Education,Family,CCAvg,Online,CreditCard, Securities.Account
+a=ggplot(PersonalL,aes(x=Mortgage,y=Personal.Loan,colour=Education))+geom_point()+
+  geom_smooth(method="loess",size=1,span=1.5)+
+  ylim(-.2,1.2)+
+  facet_wrap(~Education)
+
+b1=ggplot(PersonalL,aes(x=Mortgage,y=Personal.Loan,colour=Family))+geom_point()+
+  geom_smooth(method="loess",size=1,span=1.5)+
+  ylim(-.2,1.2)+
+  facet_wrap(~Family)
+
+c=ggplot(PersonalL,aes(x=Mortgage,y=Personal.Loan,colour=CCAvg))+geom_point()+
+  geom_smooth(method="loess",size=1,span=1.5)+
+  ylim(-.2,1.2)+
+  facet_wrap(~CCAvg)
+
+d=ggplot(PersonalL,aes(x=Mortgage,y=Personal.Loan,colour=Online))+geom_point()+
+  geom_smooth(method="loess",size=1,span=1.5)+
+  ylim(-.2,1.2)+
+  facet_wrap(~Online)
+
+e=ggplot(PersonalL,aes(x=Mortgage,y=Personal.Loan,colour=CreditCard))+geom_point()+
+  geom_smooth(method="loess",size=1,span=1.5)+
+  ylim(-.2,1.2)+
+  facet_wrap(~CreditCard)
+
+f=ggplot(PersonalL,aes(x=Mortgage,y=Personal.Loan,colour=Securities.Account))+geom_point()+
+  geom_smooth(method="loess",size=1,span=1.5)+
+  ylim(-.2,1.2)+
+  facet_wrap(~Securities.Account)
+
+grid.arrange(a,f,e,d, ncol=2)
+
+#Education,Family,CCAvg,Online,CreditCard, Securities.Account
+a=ggplot(PersonalL,aes(x=CCAvg,y=Personal.Loan,colour=Education))+geom_point()+
+  geom_smooth(method="loess",size=1,span=1.5)+
+  ylim(-.2,1.2)+
+  facet_wrap(~Education)
+
+b2=ggplot(PersonalL,aes(x=CCAvg,y=Personal.Loan,colour=Family))+geom_point()+
+  geom_smooth(method="loess",size=1,span=1.5)+
+  ylim(-.2,1.2)+
+  facet_wrap(~Family)
+
+c=ggplot(PersonalL,aes(x=CCAvg,y=Personal.Loan,colour=CCAvg))+geom_point()+
+  geom_smooth(method="loess",size=1,span=1.5)+
+  ylim(-.2,1.2)+
+  facet_wrap(~CCAvg)
+
+d=ggplot(PersonalL,aes(x=CCAvg,y=Personal.Loan,colour=Online))+geom_point()+
+  geom_smooth(method="loess",size=1,span=1.5)+
+  ylim(-.2,1.2)+
+  facet_wrap(~Online)
+
+e=ggplot(PersonalL,aes(x=CCAvg,y=Personal.Loan,colour=CreditCard))+geom_point()+
+  geom_smooth(method="loess",size=1,span=1.5)+
+  ylim(-.2,1.2)+
+  facet_wrap(~CreditCard)
+
+f=ggplot(PersonalL,aes(x=CCAvg,y=Personal.Loan,colour=Securities.Account))+geom_point()+
+  geom_smooth(method="loess",size=1,span=1.5)+
+  ylim(-.2,1.2)+
+  facet_wrap(~Securities.Account)
+```
+
+```{r}
+# prefinalmodel2: Stepwise with logged Mortgage, below observations removed, 3rd power Income, and Income*Family.
+model1_train = final_train[-c(350, 976, 1070, 1127, 2159),]
+prefinalmodel2 = glm(Personal.Loan ~ ., data = model1_train, family = "binomial")
+## Feature selection - stepwise
+stepAIC(prefinalmodel2, direction = "both")
+finalmodel2 = glm(formula = Personal.Loan ~ poly(Income, 3) + Family + Income*Family + CCAvg + Education + Securities.Account + CD.Account + Online + CreditCard + LoggedMortgage, 
+    family = "binomial", data = model1_train)
+#finalmodel2 = glm(formula = Personal.Loan ~ poly(Income, 3) + Family + Income*Family + CCAvg + CCAvg*Family + Education + CCAvg*Education + Securities.Account + CD.Account + Online + CreditCard + LoggedMortgage + LoggedMortgage*Education + LoggedMortgage*Family, family = "binomial", data = model1_train)
+summary(finalmodel2)
+AIC(finalmodel2)          #  AIC = 549.3415
+BIC(finalmodel2)          #  BIC = 678.6824
+
+## Testing finalmodel2
+pred.final2 = predict(finalmodel2, final_test, type = "response")
+final2.cutoff = 0.34
+class.final2 = as.factor(if_else(pred.final2 < final2.cutoff, "No", "Yes"))
+prop.table(table(class.final2))
+## Confusion Matrix
+confusionMatrix(class.final2, final_test$Personal.Loan)
+                          #  Threshold   = 0.34
+                          #  Accuracy    = 0.974
+                          #  Sensitivity = 0.90323
+                          #  Specificity = 0.98216
+```
+
+```{r}
+# prefinalmodel2a: Stepwise with logged Mortgage, 3rd power Income, and Income*Family.
+prefinalmodel2a = glm(Personal.Loan ~ ., data = final_train, family = "binomial")
+## Feature selection - stepwise
+stepAIC(prefinalmodel2a, direction = "both")
+finalmodel2a = glm(formula = Personal.Loan ~ poly(Income, 3) + Family + Income*Family + CCAvg + Education + Securities.Account + CD.Account + Online + CreditCard + LoggedMortgage, 
+    family = "binomial", data = model1_train)
+
+summary(finalmodel2a)
+AIC(finalmodel2a)          #  AIC = 584.5078
+BIC(finalmodel2a)          #  BIC = 695.3714
+
+## Testing finalmodel2a
+pred.final2a = predict(finalmodel2a, final_test, type = "response")
+final2a.cutoff = 0.28
+class.final2a = as.factor(if_else(pred.final2a < final2a.cutoff, "No", "Yes"))
+prop.table(table(class.final2a))
+## Confusion Matrix
+confusionMatrix(class.final2a, final_test$Personal.Loan)
+                          #  Threshold   = 0.28
+                          #  Accuracy    = 0.972
+                          #  Sensitivity = 0.91613
+                          #  Specificity = 0.97844
+
+```
+
+```{r}
+## prefinalmodel2b: Repeated K-Fold Cross Validation with logged Mortgage, 3rd power Income, and Income*Family.
+ctrl <- trainControl(method = "repeatedcv", number = 10, savePredictions = TRUE)
+mod_fit <- train(Personal.Loan ~ poly(Income, 3) + Family + Income*Family + CCAvg + Education + Securities.Account + CD.Account + Online + CreditCard + LoggedMortgage,
+                 data = final_df, 
+                 method = "glm", family = "binomial",
+                 trControl = ctrl, tuneLength = 5)
+pred.final2b = predict(mod_fit, newdata = final_test)
+confusionMatrix(data=pred.final2b, final_test$Personal.Loan)
+                          #  Accuracy    = 0.9787
+                          #  Sensitivity = 0.8516
+                          #  Specificity = 0.9933
+```
+
+```{r}
+## ROC Curve
+test_label = final_df[-split, "Personal.Loan"]
+results.model1a = prediction(pred.final1a, test_label)
+length(pred.final1a)
+length(test_label)
+roc.model1a = performance(results.model1a, measure = "tpr", x.measure = "fpr")
+
+results.model2a = prediction(pred.final2a, test_label)
+length(pred.final2a)
+length(test_label)
+roc.model2a = performance(results.model2a, measure = "tpr", x.measure = "fpr")
+
+plot(roc.step, col = "red", xlim = c(0, 0.3), ylim = c(0.7, 1.0))
+plot(roc.poly.income3, col = "green", add = TRUE, xlim = c(0, 0.3), ylim = c(0.7, 1.0))
+plot(roc.model1a, col = "blue", add = TRUE, xlim = c(0, 0.3), ylim = c(0.7, 1.0))
+plot(roc.model2a, col = "orange", add = TRUE, xlim = c(0, 0.3), ylim = c(0.7, 1.0))
+legend("bottomright", legend = c("Stepwise", "3rd Power Income", "Model 1A", "Model 2A"),
+       col = c("red", "green", "blue", "orange"), 
+       lty=1, lwd=1)
+```
+
+# Objective 2: LDA (continuous predictors only)
+```{r}
+# Find only continuous predictors
+str(train)
+
+# Setting up for PCA then LDA
+LDA_train = select_if(train, is.numeric) %>% mutate(Personal.Loan = train$Personal.Loan)
+str(LDA_train)
+pairs(LDA_train)
+
+# PCA
+reduced = LDA_train[-c(5)]
+pc.result<-prcomp(reduced,scale=FALSE)
+eigenvals<-(pc.result$sdev)^2
+eigenvals
+plot(1:4,eigenvals/sum(eigenvals),type="l",main="Scree Plot",ylab="Prop. Var. 
+Explained")
+cumulative.prop<-cumsum(eigenvals/sum(eigenvals))
+plot(1:4,cumulative.prop,type="l",main="Cumulative proportion",ylim=c(0,1))
+par(mfrow=c(1,1))
+
+# The desired number of PCs looks to be 1, since 2 retains 0% of the total variation.
+
+# Build Model
+LDA.model = lda(Personal.Loan ~ ., LDA_train)
+LDA.model
+
+# Criteria
+fit.p<-predict(LDA.model, newdata=test)
+str(fit.p)
+
+# ROC Curves
+results.model<-prediction(fit.p$posterior[,2], test$Personal.Loan,label.ordering=c("No","Yes"))
+roc.lda_= performance(results.model, measure = "tpr", x.measure = "fpr")
+
+plot(roc.step, col = "blue", xlim = c(0, 0.3), ylim = c(0.7, 1.0))
+plot(roc.model2a, col = "red", add = TRUE, xlim = c(0, 0.3), ylim = c(0.7, 1.0))
+plot(roc.lda_, col = "green", add = TRUE, xlim = c(0, 0.3), ylim = c(0.7, 1.0))
+legend("bottomright", legend = c("Stepwise", "Complex", "LDA"), 
+       col = c("blue", "red", "green"), 
+       lty=1, lwd=1)
+
+#fake<-train
+#fake$Personal.Loan<-sample(fake$Personal.Loan,3500,replace=F)
+#LDA.model.fake = lda(Personal.Loan ~ ., fake)
+#LDA.model.fake
+
+# Universally compare accuracy
+confusionMatrix(class.step, test$Personal.Loan)$overall[1]
+confusionMatrix(class.final2a, test$Personal.Loan)$overall[1]
+round((mean(predict(LDA.model,newdata=test)$class==test$Personal.Loan)),3)
+```
+
+
