@@ -15,7 +15,7 @@ Tools used:
 + [Firewall Traffic Detection](https://github.com/duynlq/Personal-Projects/blob/main/firewall_traffic/%20firewall_traffic.ipynb) Multinomial logistic regression model that classifies incoming firewall traffic as allow, drop, deny, or reset-both. Least accessed ports are grouped into one for each port type. Hypertuning is done using GridSearchCV, where C-Support Vector Classification and SGD Classifier are used, achieving 100% and 99% accuracy, respectively. 
 + [Budget Loss Prediction](https://github.com/duynlq/Personal-Projects/blob/main/budget_loss/%20budget_loss.ipynb) Dense neural network on 160,000 rows of anonymous data that focuses on predicting the least false negatives and false positives. With budget loss of $15 assigned for false negatives and $35 for false positives, this neural network achieves $270,000 lost with 94% accuracy when predicting on the entire preprocessed data.
 
-*TODO: flesh out each project with business in mind into separate repos.*
+*TODO: flesh out each project with business in mind into separate repos*
 
 
 
