@@ -1,7 +1,7 @@
 # Personal Projects
 
 Tools used: 
-+ *Python (Pandas, Numpy, Pyplot, Seaborn, Tensorflow, scikit-learn, imbalanced-learn, email, nltk, re, scipy, xgboost, )* 
++ *Python (Pandas, Numpy, Pyplot, Seaborn, Tensorflow, scikit-learn, imbalanced-learn, email, nltk, re, scipy, xgboost)* 
 + *R (tidyverse, DataExplorer, caret, MASS, regclass, ggplot2, glmtoolbox, GGally, lindia, gridExtra, glmnet, ROCR, stats, MLmetrics, mvtnorm, RColorBrewer, pheatmap, cluster, jtools, broom)*
 
 ## Contents
