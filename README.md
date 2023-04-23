@@ -1,13 +1,13 @@
 # Personal Projects
 
 Tools used: 
-+ *Python (Pandas, Numpy, Pyplot, Seaborn, Tensorflow, scikit-learn, imbalanced-learn, email, nltk, re, scipy, xgboost)* 
++ *Python (Pandas, Numpy, Pyplot, Seaborn, Tensorflow, PyMongo, scikit-learn, imbalanced-learn, sys, os, email, nltk, re, nturl2path, requests, bs4, random, time, pprint, inspect)* 
 + *R (tidyverse, DataExplorer, caret, MASS, regclass, ggplot2, glmtoolbox, GGally, lindia, gridExtra, glmnet, ROCR, stats, MLmetrics, mvtnorm, RColorBrewer, pheatmap, cluster, jtools, broom)*
 
 ## Contents
 
 #### Natural Language Processing
-+ [Hotel Customer Segmentation](
++ [Hotel Customer Segmentation](https://github.com/duynlq/Personal-Projects/blob/main/hotel_reviews/hotel_reviews_segmentation.pdf) Explores hotel guests in Paris and the things they most cared about through visualizations and wordclouds. Scraped Tripadvisor reviews on July 2022 and stored them into a local Mongo database.
 + [Spam Classifier](https://github.com/duynlq/Personal-Projects/blob/main/spam_classifier/spam_classifier.ipynb): Predicting whether an email is spam using word relevancy and text segmentation. Texts from emails are vectorized into a TF-IDF matrix, and K-means++ clustering is used to create a column of clusters that each email belongs to, which is then appended to the matrix. The final model uses the Gaussian Naive-Bayes classifier and achieves 99% accuracy. Uses a subset of this [data](https://spamassassin.apache.org/old/publiccorpus/).
 
 #### Machine Learning
